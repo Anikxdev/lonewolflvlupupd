@@ -1,0 +1,28 @@
+{
+    "78d2182a1bc8fcbefcb961871ced7d76": {
+        "unique_device_id": "Google|d4a0e9d6-c16f-4aef-8e68-f7d511f6b955",
+        "brand": "Samsung",
+        "model": "SM-G998B",
+        "gpu_renderer": "Adreno (TM) 660",
+        "system_software": "Android OS 12 / API-31",
+        "screen_width": 1080,
+        "screen_height": 3200,
+        "screen_dpi": "361",
+        "memory": 6233,
+        "processor_details": "ARM64 FP ASIMD AES VMH | 2630 | 9",
+        "client_ip": "145.129.17.31"
+    },
+    "7fbb32ec6e83b58a4b454be493463ff4": {
+        "unique_device_id": "Google|c29bcd51-ece3-4190-99af-f3b0a9549ffa",
+        "brand": "Poco",
+        "model": "M2102J20SG",
+        "gpu_renderer": "Adreno (TM) 660",
+        "system_software": "Android OS 13 / API-33",
+        "screen_width": 1280,
+        "screen_height": 3200,
+        "screen_dpi": "411",
+        "memory": 6332,
+        "processor_details": "ARM64 FP ASIMD AES VMH | 2672 | 6",
+        "client_ip": "222.249.41.52"
+    }
+}
