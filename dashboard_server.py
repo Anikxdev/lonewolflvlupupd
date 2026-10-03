@@ -178,23 +178,46 @@ async def handle_add_account(request: web.Request) -> web.Response:
 async def handle_delete_account(request: web.Request) -> web.Response:
     try:
         data = await request.json()
-        uid = str(data.get("uid")).strip()
+        uid = str(data.get("uid") or "").strip()
+        if not uid:
+            return web.json_response({"status": "error", "error": "UID is required"}, status=400)
+
+        # Dashboard UIDs are the in-game account IDs. Resolve their original
+        # saved credential too, so token-backed accounts are removed as well.
+        credentials = bot_state.account_credentials.get(uid, {})
+        auth_uid = str(credentials.get("auth_uid") or "").strip()
+        auth_token = str(credentials.get("auth_token") or "").strip()
         accounts_file = "accounts.json"
         if os.path.exists(accounts_file):
             with open(accounts_file, "r", encoding="utf-8") as f:
                 existing = json.load(f)
-            existing = [acc for acc in existing if str(acc.get("uid")) != uid]
+            existing = [
+                acc for acc in existing
+                if str(acc.get("uid") or "").strip() not in {uid, auth_uid}
+                and str(acc.get("token") or "").strip() != auth_token
+            ]
             with open(accounts_file, "w", encoding="utf-8") as f:
                 json.dump(existing, f, indent=2)
 
         if uid in bot_state.accounts:
             del bot_state.accounts[uid]
+            bot_state.recalc_totals()
 
-        if uid in bot_state.account_workers:
-            bot_state.account_workers[uid].cancel()
-            del bot_state.account_workers[uid]
+        worker_keys = {uid, auth_uid}
+        if auth_token:
+            worker_keys.add(auth_token[:10])
+        workers = {bot_state.account_workers.pop(key) for key in worker_keys if key in bot_state.account_workers}
+        for worker in workers:
+            if not worker.done():
+                worker.cancel()
+        if workers:
+            await asyncio.gather(*workers, return_exceptions=True)
 
-        bot_state.log(f"Account {uid} removed from rotation.", "warning", uid)
+        for key, value in list(bot_state.account_credentials.items()):
+            if key == uid or value is credentials:
+                bot_state.account_credentials.pop(key, None)
+
+        bot_state.log(f"Account {uid} removed from rotation and its match stopped.", "warning", uid)
         return web.json_response({"status": "ok"})
     except Exception as e:
         return web.json_response({"status": "error", "error": str(e)})

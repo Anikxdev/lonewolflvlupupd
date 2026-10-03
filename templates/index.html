@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ANIK VAI ON TOP | FreeFire Level Up Bot Dashboard</title>
+    <title>ANIKS LVL UP BOT</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -48,6 +48,45 @@
         .container {
             max-width: 1440px;
             margin: 0 auto;
+        }
+
+        .notice-marquee {
+            overflow: hidden;
+            white-space: nowrap;
+            border: 1px solid rgba(0, 242, 254, 0.22);
+            border-radius: 12px;
+            background: linear-gradient(90deg, rgba(0, 242, 254, 0.09), rgba(127, 0, 255, 0.12));
+            color: #b9faff;
+            padding: 11px 0;
+            margin: -8px 0 22px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .notice-marquee span {
+            display: inline-block;
+            padding-left: 100%;
+            animation: notice-scroll 20s linear infinite;
+        }
+
+        .notice-marquee:hover span { animation-play-state: paused; }
+
+        @keyframes notice-scroll {
+            from { transform: translateX(0); }
+            to { transform: translateX(-100%); }
+        }
+
+        @media (max-width: 640px) {
+            body { padding: 14px; }
+            header { padding: 18px; align-items: flex-start; flex-direction: column; gap: 16px; }
+            .header-actions { width: 100%; }
+            .header-actions .btn { flex: 1; justify-content: center; padding: 10px; }
+            .brand-text h1 { font-size: 19px; }
+            .card-box { padding: 16px; }
+            .acc-top { align-items: flex-start; flex-direction: column; gap: 12px; }
+            .exp-box { grid-template-columns: 1fr 1fr; }
+            .exp-item:last-child { grid-column: 1 / -1; }
+            .log-stream { min-height: 300px; }
         }
 
         /* Header */
@@ -599,6 +638,195 @@
             margin-bottom: 12px;
             color: rgba(255, 255, 255, 0.1);
         }
+
+        /* Refined dashboard theme */
+        :root {
+            --bg-base: #080b12;
+            --bg-card: rgba(17, 23, 35, 0.88);
+            --bg-card-hover: #171f2e;
+            --border-card: rgba(159, 179, 211, 0.12);
+            --border-hover: rgba(105, 222, 211, 0.42);
+            --accent-cyan: #68ded3;
+            --accent-blue: #78a9ff;
+            --accent-purple: #b59aff;
+            --accent-green: #77e0a2;
+            --accent-red: #ff7285;
+            --accent-amber: #f2c879;
+            --text-main: #edf2f8;
+            --text-muted: #94a1b4;
+            --glass-glow: 0 18px 48px rgba(0, 0, 0, 0.2);
+        }
+
+        body {
+            padding: clamp(14px, 3vw, 38px);
+            background-color: var(--bg-base);
+            background-image: radial-gradient(ellipse at 12% 0%, rgba(104, 222, 211, .09), transparent 36%),
+                              radial-gradient(ellipse at 92% 10%, rgba(181, 154, 255, .08), transparent 32%),
+                              linear-gradient(180deg, #080b12 0%, #0c111a 100%);
+        }
+
+        .container { max-width: 1380px; }
+
+        header {
+            padding: clamp(18px, 2.5vw, 30px);
+            background: rgba(17, 23, 35, .8);
+            border-color: rgba(159, 179, 211, .14);
+            border-radius: 22px;
+            box-shadow: 0 18px 55px rgba(0, 0, 0, .22);
+        }
+
+        .logo-box {
+            flex: 0 0 50px;
+            width: 50px;
+            height: 50px;
+            border-radius: 16px;
+            background: linear-gradient(145deg, #68ded3, #8da9ff);
+            color: #0b1418;
+            box-shadow: 0 8px 24px rgba(104, 222, 211, .17);
+            animation: none;
+        }
+
+        .brand-text h1 {
+            letter-spacing: -.8px;
+            background-image: linear-gradient(100deg, #f7f9fc, #9debe3);
+        }
+
+        .brand-text p { flex-wrap: wrap; }
+        .live-tag { background: rgba(119, 224, 162, .09); border-color: rgba(119, 224, 162, .2); }
+
+        .notice-marquee {
+            background: rgba(104, 222, 211, .055);
+            border-color: rgba(104, 222, 211, .16);
+            color: #bdece7;
+            border-radius: 14px;
+        }
+
+        .btn { min-height: 44px; border-radius: 12px; }
+        .btn-primary {
+            background: linear-gradient(135deg, #8de6dc, #9ab8ff);
+            box-shadow: 0 7px 20px rgba(104, 222, 211, .13);
+        }
+        .btn-primary:hover { box-shadow: 0 10px 25px rgba(104, 222, 211, .2); }
+
+        .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+        .stat-card {
+            min-width: 0;
+            padding: 19px;
+            gap: 14px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, rgba(22, 29, 43, .94), rgba(15, 21, 32, .92));
+            border-color: rgba(159, 179, 211, .1);
+        }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: var(--glass-glow); }
+        .stat-icon { flex: 0 0 48px; width: 48px; height: 48px; border-radius: 15px; font-size: 19px; }
+        .stat-content h3 { font-size: clamp(20px, 2.2vw, 26px); overflow-wrap: anywhere; }
+        .stat-content p { margin-top: 2px; }
+
+        .dashboard-main { grid-template-columns: minmax(0, 1.55fr) minmax(300px, .85fr); gap: 18px; }
+        .card-box {
+            min-width: 0;
+            padding: clamp(17px, 2vw, 24px);
+            border-radius: 20px;
+            background: rgba(17, 23, 35, .82);
+            border-color: rgba(159, 179, 211, .11);
+        }
+        .box-header { gap: 12px; }
+        .box-title { font-size: 16px; }
+        .account-card {
+            padding: clamp(15px, 2vw, 20px);
+            border-radius: 17px;
+            background: rgba(9, 13, 21, .54);
+            border-color: rgba(159, 179, 211, .1);
+        }
+        .account-card:hover { background: rgba(23, 31, 46, .88); }
+        .acc-avatar { background: linear-gradient(145deg, #182633, #202c3d); }
+        .acc-info h4 { flex-wrap: wrap; overflow-wrap: anywhere; }
+        .acc-info span { overflow-wrap: anywhere; }
+        .acc-status { flex-shrink: 0; }
+        .exp-box { background: rgba(3, 6, 11, .34); }
+        .progress-bar-bg { height: 7px; }
+        .log-stream {
+            min-width: 0;
+            min-height: 420px;
+            background: rgba(5, 8, 14, .76);
+            border-color: rgba(159, 179, 211, .1);
+            line-height: 1.55;
+        }
+
+        .modal-overlay { padding: 18px; overflow-y: auto; }
+        .modal-card {
+            max-height: min(90vh, 760px);
+            overflow-y: auto;
+            background: #111723;
+            border-color: rgba(159, 179, 211, .16);
+            border-radius: 22px;
+        }
+        .form-input { min-height: 46px; background: rgba(4, 8, 14, .62); border-color: rgba(159, 179, 211, .16); }
+        .form-input option { background: #111723; }
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: 3px;
+        }
+
+        @media (max-width: 1050px) {
+            .dashboard-main { grid-template-columns: 1fr; }
+            .logs-box { min-height: 0; }
+            .log-stream { min-height: 280px; max-height: 420px; }
+        }
+
+        @media (max-width: 760px) {
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+            header { align-items: flex-start; flex-direction: column; gap: 18px; }
+            .header-actions { width: 100%; }
+            .header-actions .btn { flex: 1; justify-content: center; }
+            .dashboard-main { gap: 14px; }
+        }
+
+        @media (max-width: 520px) {
+            body { padding: 12px; }
+            header { padding: 17px; border-radius: 18px; }
+            .brand { gap: 12px; }
+            .logo-box { flex-basis: 44px; width: 44px; height: 44px; font-size: 19px; }
+            .brand-text h1 { font-size: clamp(17px, 5vw, 20px); }
+            .brand-text p { font-size: 11px; gap: 6px; }
+            .header-actions { gap: 8px; }
+            .header-actions .btn { padding: 10px 8px; font-size: 12px; }
+            .notice-marquee { margin-bottom: 15px; font-size: 12px; }
+            .stats-grid { gap: 9px; margin-bottom: 15px; }
+            .stat-card { padding: 13px 11px; gap: 10px; border-radius: 15px; }
+            .stat-icon { flex-basis: 38px; width: 38px; height: 38px; border-radius: 12px; font-size: 16px; }
+            .stat-content h3 { font-size: clamp(17px, 5vw, 22px); }
+            .stat-content p { font-size: 11px; line-height: 1.25; }
+            .card-box { padding: 15px 12px; border-radius: 17px; }
+            .box-title { font-size: 14px; gap: 8px; }
+            .box-header { margin-bottom: 14px; }
+            .account-card { padding: 14px 12px; }
+            .acc-top { align-items: flex-start; flex-direction: column; gap: 11px; }
+            .acc-profile { min-width: 0; gap: 10px; }
+            .acc-info { min-width: 0; }
+            .acc-info h4 { font-size: 14px; }
+            .acc-avatar { flex: 0 0 40px; width: 40px; height: 40px; }
+            .exp-box { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 11px; }
+            .exp-item:last-child { grid-column: 1 / -1; }
+            .exp-val { font-size: 13px; }
+            .acc-actions { gap: 8px; font-size: 11px; }
+            .action-btns { flex-shrink: 0; }
+            .icon-btn { width: 38px; height: 38px; }
+            .log-stream { min-height: 250px; padding: 11px; font-size: 11px; }
+            .modal-overlay { padding: 12px; align-items: flex-end; }
+            .modal-card { padding: 20px 17px; border-radius: 20px 20px 14px 14px; }
+            .modal-card .btn { flex: 1; justify-content: center; }
+        }
+
+        @media (max-width: 360px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .stat-card { align-items: flex-start; flex-direction: column; }
+            .acc-actions { align-items: flex-start; flex-direction: column; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+        }
     </style>
 </head>
 <body>
@@ -610,10 +838,10 @@
                     <i class="fa-solid fa-bolt"></i>
                 </div>
                 <div class="brand-text">
-                    <h1>ANIK VAI ON TOP <span style="font-weight:400; color:var(--text-muted); font-size:16px;">| LEVEL UP BOT</span></h1>
+                    <h1>ANIKS LVL UP BOT</h1>
                     <p>
                         <span class="live-tag"><span class="pulse-dot"></span> System Live</span>
-                        <span>• Safe Multi-Match Engine</span>
+                        <span>• Live Account Dashboard</span>
                     </p>
                 </div>
             </div>
@@ -622,6 +850,10 @@
                 <button class="btn btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> Add Account</button>
             </div>
         </header>
+
+        <div class="notice-marquee" role="note" aria-label="Account level requirement">
+            <span><i class="fa-solid fa-circle-info"></i>&nbsp; Your ID should be minimum level 3 to use the Level Up Bot. &nbsp; • &nbsp; Your ID should be minimum level 3 to use the Level Up Bot.</span>
+        </div>
 
         <!-- Stats Bar -->
         <div class="stats-grid">
