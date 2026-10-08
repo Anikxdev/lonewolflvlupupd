@@ -5,3 +5,5 @@ protobuf-decoder
 protobuf
 requests
 aiohttp
+cryptography
+pywebpush

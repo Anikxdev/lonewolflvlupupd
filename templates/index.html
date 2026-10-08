@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-<title>ANIKS // LVL UP WEB</title>
+<title>ANIKS // LVL UP WEB V3 PRO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -303,6 +303,27 @@ body::after {
 
 .add-btn:hover::before { left: 100%; }
 .add-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(220, 38, 38, 0.45); }
+
+.utility-btn {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+}
+
+.utility-btn:hover { color: #fff; border-color: var(--red); }
 
 .sb-footer {
     margin-top: auto;
@@ -892,6 +913,17 @@ body::after {
     font-size: 12px;
 }
 
+.act-btn.restart {
+    width: auto;
+    gap: 5px;
+    padding: 0 8px;
+}
+
+.act-btn.restart span {
+    font-size: 9px;
+    font-weight: 700;
+}
+
 .act-btn:hover {
     background: rgba(220, 38, 38, 0.15);
     border-color: var(--red);
@@ -1078,6 +1110,35 @@ body::after {
     background: linear-gradient(90deg, transparent, var(--red), transparent);
     border-radius: 14px 14px 0 0;
 }
+
+.confirm-message {
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.7;
+    font-family: 'JetBrains Mono', monospace;
+    overflow-wrap: anywhere;
+}
+
+.site-notice {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 120;
+    max-width: min(440px, calc(100vw - 40px));
+    padding: 14px 18px;
+    border: 1px solid var(--border-hi);
+    border-radius: 10px;
+    background: #100909;
+    color: var(--text);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+    font-size: 11px;
+    line-height: 1.6;
+    font-family: 'JetBrains Mono', monospace;
+    overflow-wrap: anywhere;
+}
+
+.site-notice.error { border-color: var(--red); }
+.site-notice.success { border-color: var(--green); }
 
 .modal-head {
     display: flex;
@@ -1357,7 +1418,7 @@ textarea.form-input { resize: vertical; min-height: 76px; }
             <div class="brand-mark"><i class="fa-solid fa-bolt"></i></div>
             <div class="brand-text">
                 <h1>ANIKS</h1>
-                <small>LVL UP BOT v2</small>
+                <small>LVL UP BOT v3 PRO</small>
             </div>
         </div>
 
@@ -1390,6 +1451,12 @@ textarea.form-input { resize: vertical; min-height: 76px; }
 
         <button class="add-btn" onclick="openModal()">
             <i class="fa-solid fa-plus"></i> Add Account
+        </button>
+        <button class="utility-btn" id="enable-push" onclick="enablePushNotifications()">
+            <i class="fa-solid fa-bell"></i> Enable Phone Notifications
+        </button>
+        <button class="utility-btn" onclick="logoutDashboard()">
+            <i class="fa-solid fa-right-from-bracket"></i> Log Out
         </button>
 
         <div class="sb-footer">
@@ -1466,6 +1533,7 @@ textarea.form-input { resize: vertical; min-height: 76px; }
                 <select class="form-input" id="acc-type" onchange="toggleType()">
                     <option value="guest">Guest Credentials (UID + Password)</option>
                     <option value="token">Access Token</option>
+                    <option value="json">Add IDs via JSON File</option>
                 </select>
             </div>
             <div id="guest-fields">
@@ -1484,6 +1552,13 @@ textarea.form-input { resize: vertical; min-height: 76px; }
                     <textarea class="form-input" id="in-token" rows="3" placeholder="Paste access token..."></textarea>
                 </div>
             </div>
+            <div id="json-fields" style="display:none;">
+                <div class="form-group">
+                    <label>Account JSON File</label>
+                    <input type="file" class="form-input" id="in-json" accept=".json,application/json">
+                    <small>Use a list such as [{"UID": "password"}].</small>
+                </div>
+            </div>
             <div class="form-actions">
                 <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
                 <button type="submit" class="btn btn-red"><i class="fa-solid fa-plus"></i> Add Account</button>
@@ -1491,6 +1566,22 @@ textarea.form-input { resize: vertical; min-height: 76px; }
         </form>
     </div>
 </div>
+
+<div class="modal" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <div class="modal-card">
+        <div class="modal-head">
+            <h3 id="confirm-title"><i class="fa-solid fa-triangle-exclamation"></i> Confirm Action</h3>
+            <button class="close-btn" type="button" aria-label="Cancel" onclick="closeConfirm(false)"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p class="confirm-message" id="confirm-message"></p>
+        <div class="form-actions">
+            <button type="button" class="btn btn-ghost" onclick="closeConfirm(false)">Cancel</button>
+            <button type="button" class="btn btn-red" id="confirm-action" onclick="closeConfirm(true)">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="site-notice" id="site-notice" role="status" aria-live="polite" hidden></div>
 
 <script>
 const EXP_IS_CUMULATIVE = true;
@@ -1543,58 +1634,117 @@ function localProgress(level, exp) {
 
 let startTime = Date.now();
 const renderedAccounts = new Set();
+let confirmationResolver = null;
+let noticeTimeout = null;
 
 function openModal()  { document.getElementById('modal').classList.add('show'); }
 function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+function showConfirm(message, actionLabel = 'Confirm') {
+    if (confirmationResolver) confirmationResolver(false);
+    const modal = document.getElementById('confirm-modal');
+    const action = document.getElementById('confirm-action');
+    document.getElementById('confirm-message').textContent = message;
+    action.textContent = actionLabel;
+    modal.classList.add('show');
+    action.focus();
+    return new Promise(resolve => { confirmationResolver = resolve; });
+}
+
+function closeConfirm(confirmed) {
+    const modal = document.getElementById('confirm-modal');
+    modal.classList.remove('show');
+    const resolve = confirmationResolver;
+    confirmationResolver = null;
+    if (resolve) resolve(confirmed);
+}
+
+function showNotice(message, type = 'error') {
+    const notice = document.getElementById('site-notice');
+    notice.textContent = message;
+    notice.className = `site-notice ${type}`;
+    notice.hidden = false;
+    clearTimeout(noticeTimeout);
+    noticeTimeout = setTimeout(() => { notice.hidden = true; }, 5000);
+}
+
+document.getElementById('confirm-modal').addEventListener('click', event => {
+    if (event.target.id === 'confirm-modal') closeConfirm(false);
+});
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && confirmationResolver) closeConfirm(false);
+});
 
 function toggleType() {
     const t = document.getElementById('acc-type').value;
     document.getElementById('guest-fields').style.display = t === 'guest' ? 'block' : 'none';
     document.getElementById('token-fields').style.display = t === 'token' ? 'block' : 'none';
+    document.getElementById('json-fields').style.display = t === 'json' ? 'block' : 'none';
 }
 
 async function submitAdd(e) {
     e.preventDefault();
     const type = document.getElementById('acc-type').value;
     let payload = {};
+    let endpoint = '/api/account/add';
     if (type === 'guest') {
         const uid = document.getElementById('in-uid').value.trim();
         const pwd = document.getElementById('in-pwd').value.trim();
-        if (!uid || !pwd) return alert('UID and Password required');
+        if (!uid || !pwd) return showNotice('UID and Password required');
         payload = { uid, password: pwd };
-    } else {
+    } else if (type === 'token') {
         const tok = document.getElementById('in-token').value.trim();
-        if (!tok) return alert('Token required');
+        if (!tok) return showNotice('Token required');
         payload = { token: tok };
+    } else {
+        const file = document.getElementById('in-json').files[0];
+        if (!file) return showNotice('Select a JSON file');
+        try {
+            const accounts = JSON.parse(await file.text());
+            if (!Array.isArray(accounts) || accounts.length === 0) {
+                return showNotice('JSON must contain a non-empty list of UID/password objects');
+            }
+            payload = { accounts };
+            endpoint = '/api/account/import';
+        } catch (err) {
+            return showNotice('Could not read JSON file: ' + err.message);
+        }
     }
     try {
-        const res = await fetch('/api/account/add', {
+        const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         const d = await res.json();
-        if (d.status === 'ok') {
+        if (res.ok && d.status === 'ok') {
             closeModal();
             document.getElementById('add-form').reset();
+            toggleType();
+            if (d.imported) showNotice(`Imported ${d.imported} account(s)`, 'success');
             fetchStats();
         } else {
-            alert('Error: ' + (d.error || 'Unknown'));
+            showNotice('Error: ' + (d.error || 'Unknown'));
         }
-    } catch (err) { alert('Request failed: ' + err); }
+    } catch (err) { showNotice('Request failed: ' + err); }
 }
 
 async function deleteAccount(uid) {
-    if (!confirm('Remove account ' + uid + '?')) return;
+    if (!await showConfirm('Remove account ' + uid + '? This will stop its worker and remove its saved credentials.', 'Remove account')) return;
     try {
-        await fetch('/api/account/delete', {
+        const res = await fetch('/api/account/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ uid })
         });
+        const data = await res.json();
+        if (!res.ok || data.status !== 'ok') {
+            showNotice('Remove failed: ' + (data.error || 'Unknown error'));
+            return;
+        }
         renderedAccounts.delete(String(uid));
-        fetchStats();
-    } catch (err) { console.error(err); }
+        await fetchStats();
+    } catch (err) { showNotice('Remove request failed: ' + err); }
 }
 
 async function refreshAccountInfo(uid) {
@@ -1608,6 +1758,23 @@ async function refreshAccountInfo(uid) {
     } catch (err) { console.error(err); }
 }
 
+async function restartAccount(uid) {
+    if (!await showConfirm('Fully restart account ' + uid + '? It will log in again and resume play.', 'Restart account')) return;
+    try {
+        const res = await fetch('/api/account/restart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid })
+        });
+        const data = await res.json();
+        if (data.status !== 'ok') {
+            showNotice('Restart failed: ' + (data.error || 'Unknown error'));
+            return;
+        }
+        fetchStats();
+    } catch (err) { showNotice('Restart request failed: ' + err); }
+}
+
 function escapeHtml(t) {
     if (t === null || t === undefined) return '';
     return String(t)
@@ -1618,6 +1785,10 @@ function escapeHtml(t) {
 async function fetchStats() {
     try {
         const res = await fetch('/api/stats');
+        if (res.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
         const d = await res.json();
 
         document.getElementById('sb-accounts').innerText = d.total_accounts;
@@ -1640,6 +1811,7 @@ async function fetchStats() {
         }
 
         renderTerminal(d.logs || []);
+        tickAccountTimers();
     } catch (err) { console.error('fetch failed', err); }
 }
 
@@ -1715,6 +1887,7 @@ function renderAccount(acc) {
                         </span>
                     </div>
                     <div class="acc-uid">UID: ${escapeHtml(String(acc.uid))} · ${escapeHtml(acc.region || 'BD')}</div>
+                    <div class="acc-uid">Added for <span class="account-elapsed" data-added-at="${Number(acc.added_at || Date.now() / 1000)}">00:00:00</span></div>
                 </div>
             </div>
 
@@ -1755,6 +1928,7 @@ function renderAccount(acc) {
             </div>
             <div class="stat-row-actions">
                 <button class="act-btn" title="Refresh" onclick="refreshAccountInfo('${escapeHtml(String(acc.uid))}')"><i class="fa-solid fa-rotate"></i></button>
+                <button class="act-btn restart" aria-label="Full restart: login and play" title="Full restart: login and play" onclick="restartAccount('${escapeHtml(String(acc.uid))}')"><i class="fa-solid fa-rotate-right"></i><span>Restart</span></button>
                 <button class="act-btn danger" title="Remove" onclick="deleteAccount('${escapeHtml(String(acc.uid))}')"><i class="fa-solid fa-trash"></i></button>
             </div>
         </div>
@@ -1794,12 +1968,85 @@ function renderTerminal(logs) {
 function tick() {
     const now = new Date();
     const clk = document.getElementById('tb-clock');
-    if (clk) clk.innerText = now.toTimeString().slice(0, 8) + ' UTC';
+    if (clk) clk.innerText = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Dhaka', hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    }).format(now) + ' BD';
     const sec = Math.floor((Date.now() - startTime) / 1000);
     const h = String(Math.floor(sec / 3600)).padStart(2, '0');
     const m = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
     const u = document.getElementById('sb-uptime');
     if (u) u.innerText = `${h}:${m}`;
+    tickAccountTimers();
+}
+
+function tickAccountTimers() {
+    const now = Date.now() / 1000;
+    document.querySelectorAll('.account-elapsed[data-added-at]').forEach(timer => {
+        let elapsed = Math.max(0, Math.floor(now - Number(timer.dataset.addedAt)));
+        const days = Math.floor(elapsed / 86400);
+        elapsed %= 86400;
+        const hours = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+        const minutes = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+        const seconds = String(elapsed % 60).padStart(2, '0');
+        timer.textContent = `${days ? days + 'd ' : ''}${hours}:${minutes}:${seconds}`;
+    });
+}
+
+function urlBase64ToUint8Array(value) {
+    const padding = '='.repeat((4 - value.length % 4) % 4);
+    const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+    return Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+}
+
+async function enablePushNotifications() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        showNotice('This browser does not support push notifications');
+        return;
+    }
+    if (!window.isSecureContext) {
+        showNotice('Phone push notifications require HTTPS. Open the dashboard through a secure HTTPS address.');
+        return;
+    }
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            showNotice('Notification permission was not granted');
+            return;
+        }
+        const registration = await navigator.serviceWorker.register('/service-worker.js');
+        const keyResponse = await fetch('/api/push/public-key');
+        if (!keyResponse.ok) throw new Error('Could not load push notification key');
+        const { publicKey } = await keyResponse.json();
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicKey)
+            });
+        }
+        const response = await fetch('/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(subscription)
+        });
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Could not save push subscription');
+        }
+        showNotice('Phone EXP notifications enabled', 'success');
+    } catch (err) {
+        showNotice('Could not enable phone notifications: ' + err.message);
+    }
+}
+
+async function logoutDashboard() {
+    try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+    } catch (err) {
+        showNotice('Could not log out: ' + err.message);
+    }
 }
 setInterval(tick, 1000);
 tick();

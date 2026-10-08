@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#07070a">
+<title>ANIKS // Dashboard Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root { color-scheme: dark; --red: #dc2626; --bright: #ef4444; --text: #ededed; --muted: #888; }
+* { box-sizing: border-box; }
+body {
+    min-height: 100vh;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    color: var(--text);
+    background: radial-gradient(ellipse at top, #240b0b 0%, #07070a 55%);
+    font-family: 'JetBrains Mono', monospace;
+}
+.login-card {
+    width: min(100%, 420px);
+    padding: 32px;
+    border: 1px solid rgba(239, 68, 68, .4);
+    border-radius: 14px;
+    background: rgba(10, 8, 10, .96);
+    box-shadow: 0 24px 80px #000a, 0 0 45px #dc262622;
+}
+h1 {
+    margin: 0 0 8px;
+    color: #fff;
+    font: 800 18px 'Orbitron', sans-serif;
+    letter-spacing: 2px;
+}
+p { margin: 0 0 24px; color: var(--muted); font-size: 12px; }
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font: 700 10px 'Orbitron', sans-serif;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+input {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px;
+    border: 1px solid #dc262644;
+    border-radius: 8px;
+    outline: none;
+    background: #0009;
+    color: #fff;
+    font: 16px 'JetBrains Mono', monospace;
+}
+input:focus { border-color: var(--bright); box-shadow: 0 0 0 3px #dc262622; }
+button {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 16px;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--red), #8b0000);
+    font: 700 11px 'Orbitron', sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+#error { min-height: 20px; margin: 14px 0 0; color: var(--bright); font-size: 11px; }
+</style>
+</head>
+<body>
+<main class="login-card">
+    <h1>ANIKS // V3 PRO</h1>
+    <p>Enter the dashboard access key to continue.</p>
+    <form id="login-form">
+        <label for="login-key">Access key</label>
+        <input id="login-key" name="key" type="password" autocomplete="current-password" required autofocus>
+        <button type="submit">Log in</button>
+    </form>
+    <p id="error" role="status" aria-live="polite"></p>
+</main>
+<script>
+const form = document.getElementById('login-form');
+const error = document.getElementById('error');
+form.addEventListener('submit', async event => {
+    event.preventDefault();
+    error.textContent = '';
+    const button = form.querySelector('button');
+    button.disabled = true;
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: document.getElementById('login-key').value })
+        });
+        const result = await response.json();
+        if (!response.ok || result.status !== 'ok') {
+            error.textContent = result.error || 'Login failed';
+            return;
+        }
+        window.location.replace('/');
+    } catch (err) {
+        error.textContent = 'Login request failed: ' + err.message;
+    } finally {
+        button.disabled = false;
+    }
+});
+</script>
+</body>
+</html>
