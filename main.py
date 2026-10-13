@@ -8,7 +8,6 @@ import socket
 import struct
 import time
 import os
-import re
 import uuid
 import itertools
 from datetime import datetime
@@ -32,12 +31,12 @@ from message_ids import MESSAGE_ID_TO_NAME
 import thunderFF_pb2
 
 # ==================== WEB DASHBOARD ====================
-from dashboard_server import bot_state, send_push_notification, start_web_dashboard
+from dashboard_server import bot_state, start_web_dashboard
 
 # ==================== CONFIGURATION ====================
 WEB_HOST = "0.0.0.0"
 WEB_PORT = 20335
-ACCOUNTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "accounts.json")
+ACCOUNTS_FILE = "accounts.json"
 TOKEN_CACHE_FILE = "token_cache.json"
 DEVICES_FILE = "devices.json"
 TOKEN_CACHE_TTL = 1200
@@ -60,10 +59,6 @@ NON_MATCH_RECONNECT_DELAY = 1.0
 
 FALLBACK_UID = ""
 FALLBACK_PASSWORD = ""
-ACCOUNT_ADDED_AT: Dict[str, float] = {}
-VERBOSE_LOGGING = os.environ.get("LW_VERBOSE_LOGGING") == "1"
-LOG_DEDUPE_SECONDS = 30.0
-_TERMINAL_LOG_TIMES: Dict[str, float] = {}
 
 
 # ==================== ULTRA SAFE PERSISTENT DEVICE RANDOMIZER ====================
@@ -368,35 +363,6 @@ def _build_major_from_template(open_id: str, access_token: str) -> bytes:
 
 
 def print_colored(text, color=Colors.WHITE):
-    plain_text = re.sub(r"\x1b\[[0-9;]*m", "", str(text))
-    lower_text = plain_text.lower()
-    important = any(marker in lower_text for marker in (
-        "exp milestone",
-        "new account added",
-        "imported ",
-        "web dashboard live",
-        "all sessions cleanly closed",
-        "shutting down all accounts",
-        "no accounts found",
-        "cannot restart account",
-        "ANIKS LVL UP - freefire level up bot",
-    ))
-    if color not in (Colors.FAIL, Colors.WARNING) and not important:
-        return
-
-    dedupe_key = re.sub(r"\b\d+(?:\.\d+){3}(?::\d+)?\b", "<endpoint>", plain_text)
-    dedupe_key = re.sub(r"\b\d+\b", "#", dedupe_key)[:180]
-    now = time.monotonic()
-    previous_time = _TERMINAL_LOG_TIMES.get(dedupe_key)
-    if previous_time is not None and now - previous_time < LOG_DEDUPE_SECONDS:
-        return
-    _TERMINAL_LOG_TIMES[dedupe_key] = now
-    if len(_TERMINAL_LOG_TIMES) > 1000:
-        cutoff = now - LOG_DEDUPE_SECONDS
-        for key, timestamp in list(_TERMINAL_LOG_TIMES.items()):
-            if timestamp < cutoff:
-                _TERMINAL_LOG_TIMES.pop(key, None)
-
     try:
         print(f"{color}{text}{Colors.ENDC}")
     except Exception:
@@ -404,11 +370,6 @@ def print_colored(text, color=Colors.WHITE):
             print(f"{color}{text.encode('ascii', errors='replace').decode('ascii')}{Colors.ENDC}")
         except Exception:
             pass
-
-
-def print_debug(text):
-    if VERBOSE_LOGGING:
-        print(text)
 
 def print_success(text):
     print_colored(f"[+] {text}", Colors.GREEN)
@@ -569,25 +530,6 @@ def cache_invalidate(uid: str):
         print_warning(f"[CACHE] Invalidated: {uid}")
 
 
-def cache_invalidate_account(account_id: str, account_data: Optional[Dict] = None):
-    cache = _load_token_cache()
-    keys = set()
-    if account_data:
-        auth_uid = str(account_data.get("auth_uid") or "").strip()
-        auth_token = str(account_data.get("auth_token") or account_data.get("access_token") or "").strip()
-        if auth_uid:
-            keys.add(auth_uid)
-        if auth_token:
-            keys.add(f"tok_{auth_token[:20]}")
-    removed = False
-    for key, entry in list(cache.items()):
-        if key in keys or str(entry.get("account_id", "")) == str(account_id):
-            cache.pop(key, None)
-            removed = True
-    if removed:
-        _save_token_cache(cache)
-
-
 # ==================== ENCRYPTION & PROTOBUF ====================
 
 async def aes_encrypt(payload, key, iv):
@@ -645,7 +587,7 @@ async def get_access_token(uid, password):
     for attempt in range(5):
         try:
             response = await client.post(OAUTH_URL, headers=hdrs, json=data)
-            print_debug(f"[OAUTH] POST {OAUTH_URL}  uid={uid}  status={response.status_code}")
+            print(f"[OAUTH] POST {OAUTH_URL}  uid={uid}  status={response.status_code}")
             if response.status_code == 200:
                 j = response.json()
                 d = j.get("data", j)
@@ -654,14 +596,14 @@ async def get_access_token(uid, password):
                 platform = d.get("platform", 4)
                 if open_id and access_token:
                     return open_id, access_token, platform
-                print_debug(f"[OAUTH] 200 but missing fields: {j}")
+                print(f"[OAUTH] 200 but missing fields: {j}")
             else:
-                print_debug(f"[OAUTH] body[:200]={response.content[:200]!r}")
+                print(f"[OAUTH] body[:200]={response.content[:200]!r}")
             if response.status_code == 429:
                 await asyncio.sleep(1)
                 continue
         except Exception as e:
-            print_debug(f"[OAUTH] EXCEPTION {type(e).__name__}: {e}")
+            print(f"[OAUTH] EXCEPTION {type(e).__name__}: {e}")
         await asyncio.sleep(0.5)
     return None
 
@@ -700,19 +642,19 @@ async def send_majorlogin(data, release_version, server_url):
         response = await client.post(url, headers=req_headers, data=data)
 
         # ── DIAGNOSTIC ──
-        print_debug(f"[MAJOR] POST {url}  release={RELEASE_VERSION_OVERRIDE}  status={response.status_code}  len={len(response.content)}")
+        print(f"[MAJOR] POST {url}  release={RELEASE_VERSION_OVERRIDE}  status={response.status_code}  len={len(response.content)}")
         if response.status_code != 200:
-            print_debug(f"[MAJOR] body[:200]={response.content[:200]!r}")
+            print(f"[MAJOR] body[:200]={response.content[:200]!r}")
         else:
-            print_debug(f"[MAJOR] body_hex={response.content[:200].hex()}")
-            print_debug(f"[MAJOR] body_ascii={response.content[:200]!r}")
+            print(f"[MAJOR] body_hex={response.content[:200].hex()}")
+            print(f"[MAJOR] body_ascii={response.content[:200]!r}")
         # ── END ──
 
         if response.status_code != 200:
             return None
         response_content = response.content
         if len(response_content) < 40:
-            print_debug(f"[MAJOR] short body ({len(response_content)} bytes) — not a valid MajorLoginRes")
+            print(f"[MAJOR] short body ({len(response_content)} bytes) — not a valid MajorLoginRes")
             return None
 
         # 1. Direct parse
@@ -721,9 +663,9 @@ async def send_majorlogin(data, release_version, server_url):
             res_proto.ParseFromString(response_content)
             if res_proto.region and res_proto.token:
                 return res_proto
-            print_debug(f"[MAJOR] direct parse ok but region/token empty: region={res_proto.region!r} token_len={len(res_proto.token)}")
+            print(f"[MAJOR] direct parse ok but region/token empty: region={res_proto.region!r} token_len={len(res_proto.token)}")
         except Exception as e:
-            print_debug(f"[MAJOR] direct parse failed: {e}")
+            print(f"[MAJOR] direct parse failed: {e}")
 
         # 2. OB55 64-byte header offset check
         if len(response_content) > 64:
@@ -732,9 +674,9 @@ async def send_majorlogin(data, release_version, server_url):
                 res_proto.ParseFromString(response_content[64:])
                 if res_proto.region and res_proto.token:
                     return res_proto
-                print_debug(f"[MAJOR] offset-64 parse ok but region/token empty")
+                print(f"[MAJOR] offset-64 parse ok but region/token empty")
             except Exception as e:
-                print_debug(f"[MAJOR] offset-64 parse failed: {e}")
+                print(f"[MAJOR] offset-64 parse failed: {e}")
 
         # 3. Dynamic offset search
         for offset in range(min(128, len(response_content))):
@@ -742,15 +684,15 @@ async def send_majorlogin(data, release_version, server_url):
                 candidate = thunderFF_pb2.MajorLoginRes()
                 candidate.ParseFromString(response_content[offset:])
                 if candidate.region and candidate.token:
-                    print_debug(f"[MAJOR] dynamic offset {offset} succeeded")
+                    print(f"[MAJOR] dynamic offset {offset} succeeded")
                     return candidate
             except Exception:
                 pass
 
-        print_debug(f"[MAJOR] all parse strategies failed — 200 but unrecognized body")
+        print(f"[MAJOR] all parse strategies failed — 200 but unrecognized body")
         return None
     except Exception as e:
-        print_debug(f"[MAJOR] EXCEPTION {type(e).__name__}: {e}")
+        print(f"[MAJOR] EXCEPTION {type(e).__name__}: {e}")
         return None
 
 
@@ -763,9 +705,9 @@ async def send_getlogin(data, base_url, token, release_version):
         req_headers['Host'] = "clientbp.ppmainecoonghj.com"
         response = await client.post(url, headers=req_headers, data=data)
 
-        print_debug(f"[LOGINDATA] POST {url}  status={response.status_code}  len={len(response.content)}")
+        print(f"[LOGINDATA] POST {url}  status={response.status_code}  len={len(response.content)}")
         if response.status_code != 200:
-            print_debug(f"[LOGINDATA] body[:200]={response.content[:200]!r}")
+            print(f"[LOGINDATA] body[:200]={response.content[:200]!r}")
 
         if response.status_code != 200:
             return None
@@ -800,7 +742,7 @@ async def send_getlogin(data, base_url, token, release_version):
 
         return res_proto, dict_res
     except Exception as e:
-        print_debug(f"[LOGINDATA] EXCEPTION {type(e).__name__}: {e}")
+        print(f"[LOGINDATA] EXCEPTION {type(e).__name__}: {e}")
         return None
 
 
@@ -1847,8 +1789,7 @@ async def process_account_uid_pass(uid: str, password: str) -> Optional[Dict]:
             region=cached.get('region', 'BD'),
             level=cached.get('level', 1),
             exp=cached.get('exp', 0),
-            likes=cached.get('likes', 0),
-            added_at=ACCOUNT_ADDED_AT.get(f"guest:{uid}"),
+            likes=cached.get('likes', 0)
         )
         _register_credentials(cached)
         return cached
@@ -1856,31 +1797,31 @@ async def process_account_uid_pass(uid: str, password: str) -> Optional[Dict]:
     print_info(f"[LOGIN] Full login for UID {uid}...")
     try:
         verconfig_res = await version_config()
-        print_debug(f"[STEP] verconfig = {verconfig_res}")
+        print(f"[STEP] verconfig = {verconfig_res}")
         if verconfig_res is None:
             print_error("[STEP] version_config() returned None — API unreachable")
             return None
         release_version, client_version, server_url = verconfig_res
-        print_debug(f"[STEP] release={release_version}  client={client_version}  url={server_url}")
+        print(f"[STEP] release={release_version}  client={client_version}  url={server_url}")
 
         tokengrant_response = await get_access_token(uid, password)
         if tokengrant_response is None:
             print_error("[STEP] OAuth returned None — bad uid/pass or 429 rate limit")
             return None
         open_id, access_token, platform = tokengrant_response
-        print_debug(f"[STEP] oauth ok  open_id={open_id[:16]}...  platform={platform}")
+        print(f"[STEP] oauth ok  open_id={open_id[:16]}...  platform={platform}")
 
         device_info = get_device_for_account(uid)
-        print_debug(f"[STEP] device loaded for {uid}")
+        print(f"[STEP] device loaded for {uid}")
 
         login_payload_data = await build_majorlogin_payload(open_id, access_token, platform, client_version, device_info)
-        print_debug(f"[STEP] MajorLogin payload = {len(login_payload_data)} bytes")
+        print(f"[STEP] MajorLogin payload = {len(login_payload_data)} bytes")
 
         majorlogin_response = await send_majorlogin(login_payload_data, release_version, server_url)
         if majorlogin_response is None:
             print_error("[STEP] MajorLogin failed — see [MAJOR] line above")
             return None
-        print_debug(f"[STEP] MajorLogin ok  account_id={majorlogin_response.account_id}  region={majorlogin_response.region}")
+        print(f"[STEP] MajorLogin ok  account_id={majorlogin_response.account_id}  region={majorlogin_response.region}")
 
         getlogin_result = await send_getlogin(login_payload_data, majorlogin_response.url, majorlogin_response.token, release_version)
         if getlogin_result is None:
@@ -1895,10 +1836,7 @@ async def process_account_uid_pass(uid: str, password: str) -> Optional[Dict]:
         nickname = res_proto.nickname or get_proto_field(dict_res, 4, f"Player_{acc_id}")
         region = majorlogin_response.region or get_proto_field(dict_res, 3, "BD")
 
-        bot_state.register_account(
-            uid=acc_id, nickname=nickname, region=region, level=level, exp=exp,
-            likes=likes, added_at=ACCOUNT_ADDED_AT.get(f"guest:{uid}"),
-        )
+        bot_state.register_account(uid=acc_id, nickname=nickname, region=region, level=level, exp=exp, likes=likes)
 
         account_data = {
             'account_id': majorlogin_response.account_id,
@@ -1944,8 +1882,7 @@ async def process_account_token(access_token: str) -> Optional[Dict]:
             region=cached.get('region', 'BD'),
             level=cached.get('level', 1),
             exp=cached.get('exp', 0),
-            likes=cached.get('likes', 0),
-            added_at=ACCOUNT_ADDED_AT.get(f"token:{access_token}"),
+            likes=cached.get('likes', 0)
         )
         _register_credentials(cached)
         return cached
@@ -1953,7 +1890,7 @@ async def process_account_token(access_token: str) -> Optional[Dict]:
     print_info("[LOGIN] Full login with Access Token...")
     try:
         verconfig_res = await version_config()
-        print_debug(f"[STEP] verconfig = {verconfig_res}")
+        print(f"[STEP] verconfig = {verconfig_res}")
         if verconfig_res is None:
             return None
         release_version, client_version, server_url = verconfig_res
@@ -2007,10 +1944,7 @@ async def process_account_token(access_token: str) -> Optional[Dict]:
         nickname = res_proto.nickname or get_proto_field(dict_res, 4, f"Player_{acc_id}")
         region = majorlogin_response.region or get_proto_field(dict_res, 3, "BD")
 
-        bot_state.register_account(
-            uid=acc_id, nickname=nickname, region=region, level=level, exp=exp,
-            likes=likes, added_at=ACCOUNT_ADDED_AT.get(f"token:{access_token}"),
-        )
+        bot_state.register_account(uid=acc_id, nickname=nickname, region=region, level=level, exp=exp, likes=likes)
 
         account_data = {
             'account_id': majorlogin_response.account_id,
@@ -2184,18 +2118,8 @@ def load_accounts():
         try:
             with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, list):
-                accounts = data
-                updated = False
-                for account in accounts:
-                    if isinstance(account, dict) and not account.get("added_at"):
-                        account["added_at"] = time.time()
-                        updated = True
-                if updated:
-                    temp_file = ACCOUNTS_FILE + ".tmp"
-                    with open(temp_file, "w", encoding="utf-8") as f:
-                        json.dump(accounts, f, indent=2)
-                    os.replace(temp_file, ACCOUNTS_FILE)
+                if isinstance(data, list):
+                    accounts = data
         except Exception as e:
             print_error(f"Could not load {ACCOUNTS_FILE}: {e}")
 
@@ -2209,7 +2133,7 @@ def load_accounts():
 
 async def main():
     print_colored("=" * 60, Colors.CYAN)
-    print_colored("    ANIKS LVL UP - FreeFire Level Up Bot v3 PRO", Colors.GREEN)
+    print_colored("    TEAM 84FF - FreeFire Level Up Bot (Web Dashboard Mode)", Colors.GREEN)
     print_colored("   Persistent Device ID + TRUE Parallel + Smart DNS", Colors.WHITE)
     print_colored("=" * 60, Colors.CYAN)
     print_info(f"Start Match Interval: {START_MATCH_INTERVAL}s")
@@ -2230,95 +2154,22 @@ async def main():
     except Exception as e:
         print_error(f"Could not start web dashboard: {e}")
 
-    def schedule_account_worker(data):
+    async def on_account_added_handler(data):
         if "token" in data and data["token"]:
             t = str(data["token"]).strip()
-            ACCOUNT_ADDED_AT[f"token:{t}"] = float(data.get("added_at") or time.time())
-            key = f"token:{t}"
-            current = bot_state.account_workers.get(key)
-            if current is None or current.done():
-                bot_state.account_workers[key] = asyncio.create_task(account_loop_token(t))
+            task = asyncio.create_task(account_loop_token(t))
+            bot_state.account_workers[t[:10]] = task
         elif "uid" in data and "password" in data:
             u = str(data["uid"]).strip()
             p = str(data["password"]).strip()
-            ACCOUNT_ADDED_AT[f"guest:{u}"] = float(data.get("added_at") or time.time())
-            key = f"guest:{u}"
-            current = bot_state.account_workers.get(key)
-            if current is None or current.done():
-                bot_state.account_workers[key] = asyncio.create_task(account_loop_guest(u, p))
-
-    async def on_account_added_handler(data):
-        schedule_account_worker(data)
+            task = asyncio.create_task(account_loop_guest(u, p))
+            bot_state.account_workers[u] = task
 
     async def on_refresh_account_handler(uid):
         await refresh_account_profile(uid)
 
-    async def on_account_removed_handler(uid, account_data):
-        cache_invalidate_account(uid, account_data)
-        auth_uid = str(account_data.get("auth_uid") or "").strip()
-        auth_token = str(account_data.get("auth_token") or account_data.get("access_token") or "").strip()
-        ACCOUNT_ADDED_AT.pop(f"guest:{auth_uid or uid}", None)
-        if auth_token:
-            ACCOUNT_ADDED_AT.pop(f"token:{auth_token}", None)
-
-    async def on_restart_account_handler(uid):
-        account_data = bot_state.account_credentials.get(str(uid))
-        if account_data is None:
-            account_data = next(
-                (value for value in bot_state.account_credentials.values()
-                 if str(value.get("account_id", "")) == str(uid)),
-                None,
-            )
-        if account_data is None:
-            return False
-
-        auth_uid = str(account_data.get("auth_uid") or "").strip()
-        auth_token = str(account_data.get("auth_token") or account_data.get("access_token") or "").strip()
-        worker_keys = {
-            str(uid), auth_uid, f"guest:{auth_uid}",
-            auth_token[:10] if auth_token else "",
-            f"token:{auth_token}" if auth_token else "",
-        }
-        workers = {
-            bot_state.account_workers.pop(key)
-            for key in worker_keys if key and key in bot_state.account_workers
-        }
-        for worker in workers:
-            if not worker.done():
-                worker.cancel()
-        if workers:
-            await asyncio.gather(*workers, return_exceptions=True)
-
-        cache_invalidate_account(str(uid), account_data)
-        if auth_uid and account_data.get("auth_password"):
-            schedule_account_worker({
-                "uid": auth_uid,
-                "password": account_data["auth_password"],
-            })
-        elif auth_token:
-            schedule_account_worker({"token": auth_token})
-        else:
-            print_error(f"Cannot restart account {uid}: login credentials are unavailable")
-            return False
-
-        bot_state.log(f"Account {uid} restarting with a fresh login", "warning", str(uid))
-        return True
-
     bot_state.refresh_callbacks["on_account_added"] = on_account_added_handler
     bot_state.refresh_callbacks["on_refresh_account"] = on_refresh_account_handler
-    bot_state.refresh_callbacks["on_account_removed"] = on_account_removed_handler
-    bot_state.refresh_callbacks["on_restart_account"] = on_restart_account_handler
-
-    async def on_exp_milestone(uid, nickname, milestone):
-        message = f"EXP milestone: {nickname} reached +{milestone:,} EXP"
-        print_success(message)
-        await send_push_notification(
-            "EXP milestone reached",
-            f"{nickname} gained {milestone:,} EXP!",
-            f"exp-{uid}-{milestone}",
-        )
-
-    bot_state.exp_notification_callback = on_exp_milestone
 
     accounts = load_accounts()
 
@@ -2326,10 +2177,14 @@ async def main():
         print_warning(f"No accounts found in {ACCOUNTS_FILE}! Add accounts from Web Dashboard.")
         print_warning(f"Open: http://localhost:{WEB_PORT}")
 
-    for index, acc in enumerate(accounts):
-        await on_account_added_handler(acc)
-        if index < len(accounts) - 1:
-            await asyncio.sleep(0.5)
+    for acc in accounts:
+        if "token" in acc and acc["token"]:
+            t = asyncio.create_task(account_loop_token(acc["token"]))
+            bot_state.account_workers[acc["token"][:10]] = t
+        elif "uid" in acc and "password" in acc and acc["uid"]:
+            u = str(acc["uid"])
+            t = asyncio.create_task(account_loop_guest(u, acc["password"]))
+            bot_state.account_workers[u] = t
 
     try:
         while True:

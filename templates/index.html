@@ -1214,6 +1214,43 @@ body::after {
 textarea.form-input { resize: vertical; min-height: 76px; }
 .form-input option { background: #0a0a0a; color: #fff; }
 
+.json-preview {
+    display: grid;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.json-preview-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.json-preview-info { min-width: 0; }
+.json-preview-name { color: var(--text); font-size: 12px; overflow-wrap: anywhere; }
+.json-preview-meta { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.json-preview-error { color: var(--red); font-size: 10px; }
+.json-preview-pending { color: var(--muted); font-size: 10px; }
+.json-preview-add {
+    flex: 0 0 auto;
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    background: rgba(220, 38, 38, 0.12);
+    color: #fff;
+    padding: 8px 10px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    cursor: pointer;
+}
+.json-preview-add:disabled { opacity: 0.55; cursor: default; }
+
 .form-actions {
     display: flex;
     gap: 10px;
@@ -1525,7 +1562,7 @@ textarea.form-input { resize: vertical; min-height: 76px; }
     <div class="modal-card">
         <div class="modal-head">
             <h3><i class="fa-solid fa-user-plus"></i> Add New Account</h3>
-            <button class="close-btn" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            <button class="close-btn" type="button" aria-label="Close add account dialog" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form id="add-form" onsubmit="submitAdd(event)">
             <div class="form-group">
@@ -1548,20 +1585,22 @@ textarea.form-input { resize: vertical; min-height: 76px; }
             </div>
             <div id="token-fields" style="display:none;">
                 <div class="form-group">
-                    <label>Access Token</label>
-                    <textarea class="form-input" id="in-token" rows="3" placeholder="Paste access token..."></textarea>
+                    <label>Access Tokens</label>
+                    <textarea class="form-input" id="in-token" rows="3" placeholder="TOKEN1,TOKEN2,TOKEN3"></textarea>
+                    <small>Separate tokens with commas. Login profiles will be checked automatically.</small>
                 </div>
             </div>
             <div id="json-fields" style="display:none;">
                 <div class="form-group">
                     <label>Account JSON File</label>
                     <input type="file" class="form-input" id="in-json" accept=".json,application/json">
-                    <small>Use a list such as [{"UID": "password"}].</small>
+                    <small>Choose a JSON list such as [{"UID": "password"}]. Each login is checked automatically.</small>
                 </div>
             </div>
+            <div class="json-preview" id="json-preview" aria-live="polite"></div>
             <div class="form-actions">
                 <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-red"><i class="fa-solid fa-plus"></i> Add Account</button>
+                <button type="submit" class="btn btn-red" id="submit-add-button"><i class="fa-solid fa-plus"></i> Add Account</button>
             </div>
         </form>
     </div>
@@ -1634,6 +1673,7 @@ function localProgress(level, exp) {
 
 let startTime = Date.now();
 const renderedAccounts = new Set();
+let previewAccounts = [];
 let confirmationResolver = null;
 let noticeTimeout = null;
 
@@ -1674,17 +1714,29 @@ document.getElementById('confirm-modal').addEventListener('click', event => {
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && confirmationResolver) closeConfirm(false);
 });
+document.getElementById('in-json').addEventListener('change', () => {
+    if (document.getElementById('acc-type').value === 'json') previewJsonFile();
+});
 
 function toggleType() {
     const t = document.getElementById('acc-type').value;
     document.getElementById('guest-fields').style.display = t === 'guest' ? 'block' : 'none';
     document.getElementById('token-fields').style.display = t === 'token' ? 'block' : 'none';
     document.getElementById('json-fields').style.display = t === 'json' ? 'block' : 'none';
+    document.getElementById('submit-add-button').innerHTML = t === 'json'
+        ? '<i class="fa-solid fa-magnifying-glass"></i> Preview Accounts'
+        : t === 'token'
+        ? '<i class="fa-solid fa-magnifying-glass"></i> Preview Tokens'
+        : '<i class="fa-solid fa-plus"></i> Add Account';
 }
 
 async function submitAdd(e) {
     e.preventDefault();
     const type = document.getElementById('acc-type').value;
+    if (type === 'json' || type === 'token') {
+        await previewJsonFile();
+        return;
+    }
     let payload = {};
     let endpoint = '/api/account/add';
     if (type === 'guest') {
@@ -1692,23 +1744,6 @@ async function submitAdd(e) {
         const pwd = document.getElementById('in-pwd').value.trim();
         if (!uid || !pwd) return showNotice('UID and Password required');
         payload = { uid, password: pwd };
-    } else if (type === 'token') {
-        const tok = document.getElementById('in-token').value.trim();
-        if (!tok) return showNotice('Token required');
-        payload = { token: tok };
-    } else {
-        const file = document.getElementById('in-json').files[0];
-        if (!file) return showNotice('Select a JSON file');
-        try {
-            const accounts = JSON.parse(await file.text());
-            if (!Array.isArray(accounts) || accounts.length === 0) {
-                return showNotice('JSON must contain a non-empty list of UID/password objects');
-            }
-            payload = { accounts };
-            endpoint = '/api/account/import';
-        } catch (err) {
-            return showNotice('Could not read JSON file: ' + err.message);
-        }
     }
     try {
         const res = await fetch(endpoint, {
@@ -1721,12 +1756,157 @@ async function submitAdd(e) {
             closeModal();
             document.getElementById('add-form').reset();
             toggleType();
-            if (d.imported) showNotice(`Imported ${d.imported} account(s)`, 'success');
             fetchStats();
         } else {
             showNotice('Error: ' + (d.error || 'Unknown'));
         }
     } catch (err) { showNotice('Request failed: ' + err); }
+}
+
+async function previewJsonFile() {
+    const type = document.getElementById('acc-type').value;
+    const submitButton = document.getElementById('submit-add-button');
+    const preview = document.getElementById('json-preview');
+    let previewPayload;
+    let credentials;
+    if (type === 'token') {
+        credentials = [...new Set(
+            document.getElementById('in-token').value.split(',').map(token => token.trim()).filter(Boolean)
+        )];
+        if (!credentials.length) return showNotice('Enter one or more comma-separated access tokens');
+        previewPayload = { tokens: credentials };
+    } else {
+        const file = document.getElementById('in-json').files[0];
+        if (!file) return showNotice('Select a JSON file');
+    }
+    submitButton.disabled = true;
+    previewAccounts = type === 'token'
+        ? credentials.map(token => ({
+            token_hint: token.slice(0, 8),
+            login_type: 'token',
+            pending: true
+        }))
+        : [];
+    if (type === 'token') {
+        renderJsonPreview();
+    } else {
+        preview.innerHTML = '<div class="json-preview-pending">Logging in to check accounts…</div>';
+    }
+    try {
+        if (type === 'token') {
+            previewAccounts = [];
+        } else {
+            const file = document.getElementById('in-json').files[0];
+            const rawAccounts = JSON.parse(await file.text());
+            if (!Array.isArray(rawAccounts) || rawAccounts.length === 0) {
+                throw new Error('JSON must contain a non-empty list of UID/password objects');
+            }
+            const credentialsByUid = new Map();
+            previewPayload = {
+                accounts: rawAccounts.map(item => {
+                    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                        throw new Error('Each JSON entry must be an object');
+                    }
+                    let uid, password;
+                    if (Object.prototype.hasOwnProperty.call(item, 'uid') &&
+                        Object.prototype.hasOwnProperty.call(item, 'password')) {
+                        ({ uid, password } = item);
+                    } else if (Object.keys(item).length === 1) {
+                        [uid, password] = Object.entries(item)[0];
+                    } else {
+                        throw new Error('Each entry must contain a UID and password');
+                    }
+                    uid = String(uid).trim();
+                    password = String(password).trim();
+                    if (!uid || !password) throw new Error('UID and password cannot be empty');
+                    credentialsByUid.set(uid, password);
+                    return { uid, password };
+                })
+            };
+            credentials = credentialsByUid;
+        }
+        const response = await fetch('/api/account/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(previewPayload)
+        });
+        const data = await response.json();
+        if (!response.ok || data.status !== 'ok') {
+            throw new Error(data.error || 'Could not preview accounts');
+        }
+        previewAccounts = (data.accounts || []).map((account, index) => {
+            const loginType = type === 'token' ? 'token' : 'uid';
+            return {
+                ...account,
+                login_type: loginType,
+                credential: type === 'token'
+                    ? credentials[index]
+                    : credentials.get(String(account.uid)),
+                adding: false,
+                added: false
+            };
+        });
+        renderJsonPreview();
+        const ready = previewAccounts.filter(account => !account.error).length;
+        showNotice(`${ready} account profile(s) loaded. Choose which IDs to add.`, 'success');
+    } catch (err) {
+        preview.innerHTML = `<div class="json-preview-error">Preview failed: ${escapeHtml(err.message)}</div>`;
+        showNotice('Could not check JSON accounts: ' + err.message);
+    } finally {
+        submitButton.disabled = false;
+    }
+}
+
+function renderJsonPreview() {
+    const preview = document.getElementById('json-preview');
+    preview.innerHTML = previewAccounts.map((account, index) => {
+        const info = account.pending
+            ? `<div class="json-preview-meta">Token: ${escapeHtml(account.token_hint)}</div>
+               <div class="json-preview-pending">Logging in…</div>`
+            : account.error
+            ? `<div class="json-preview-meta">${account.login_type === 'token' ? 'Token' : 'UID'}: ${escapeHtml(account.uid || account.token_hint || '')}</div>
+               <div class="json-preview-error">${escapeHtml(account.error)}</div>`
+            : `<div class="json-preview-meta">${account.login_type === 'token' ? 'Token' : 'UID'}: ${escapeHtml(account.uid || account.token_hint || '')}</div>
+               <div class="json-preview-name">Name: ${escapeHtml(account.nickname || 'Account')}</div>
+               <div class="json-preview-meta">ID: ${escapeHtml(account.account_id)} · Level: ${escapeHtml(account.level)}</div>`;
+        const button = account.error || account.pending
+            ? ''
+            : `<button class="json-preview-add" type="button" onclick="addPreviewAccount(${index})" ${account.adding || account.added ? 'disabled' : ''}>
+                   ${account.added ? 'ADDED' : account.adding ? 'ADDING…' : 'ADD ID'}
+               </button>`;
+        return `<div class="json-preview-row">
+                    <div class="json-preview-info">${info}</div>
+                    ${button}
+                </div>`;
+    }).join('');
+}
+
+async function addPreviewAccount(index) {
+    const account = previewAccounts[index];
+    if (!account || account.adding || account.added || account.error) return;
+    account.adding = true;
+    renderJsonPreview();
+    try {
+        const res = await fetch('/api/account/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(account.login_type === 'token'
+                ? { token: account.credential }
+                : { uid: account.uid, password: account.credential })
+        });
+        const data = await res.json();
+        if (!res.ok || data.status !== 'ok') {
+            throw new Error(data.error || 'Unknown error');
+        }
+        account.added = true;
+        showNotice(`Added ${account.nickname} (ID ${account.account_id})`, 'success');
+        fetchStats();
+    } catch (err) {
+        showNotice('Could not add account: ' + err.message);
+    } finally {
+        account.adding = false;
+        renderJsonPreview();
+    }
 }
 
 async function deleteAccount(uid) {
@@ -1738,7 +1918,7 @@ async function deleteAccount(uid) {
             body: JSON.stringify({ uid })
         });
         const data = await res.json();
-        if (!res.ok || data.status !== 'ok') {
+        if (!res.ok || data.status !== 'ok' || !data.removed) {
             showNotice('Remove failed: ' + (data.error || 'Unknown error'));
             return;
         }

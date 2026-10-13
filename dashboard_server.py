@@ -774,39 +774,135 @@ async def handle_import_accounts(request: web.Request) -> web.Response:
         return web.json_response({"status": "error", "error": str(e)}, status=500)
 
 
+async def handle_preview_accounts(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+        if not isinstance(data, dict):
+            return web.json_response({"status": "error", "error": "Invalid request"}, status=400)
+
+        raw_accounts = data.get("accounts")
+        raw_tokens = data.get("tokens")
+        if raw_tokens is not None:
+            if not isinstance(raw_tokens, list) or not raw_tokens:
+                return web.json_response(
+                    {"status": "error", "error": "Provide one or more access tokens"},
+                    status=400,
+                )
+            tokens = list(dict.fromkeys(
+                str(token).strip() for token in raw_tokens if str(token).strip()
+            ))
+            if not tokens:
+                return web.json_response(
+                    {"status": "error", "error": "Provide one or more access tokens"},
+                    status=400,
+                )
+            callback = bot_state.refresh_callbacks.get("on_token_preview_batch")
+            if callback is None:
+                return web.json_response(
+                    {"status": "error", "error": "Token preview is not ready"},
+                    status=503,
+                )
+            accounts = await callback(tokens)
+            for account in accounts:
+                account["login_type"] = "token"
+            return web.json_response({"status": "ok", "accounts": accounts})
+
+        if not isinstance(raw_accounts, list) or not raw_accounts:
+            return web.json_response(
+                {"status": "error", "error": "JSON must contain a non-empty list of UID/password objects"},
+                status=400,
+            )
+
+        imported: Dict[str, str] = {}
+        for item in raw_accounts:
+            if not isinstance(item, dict):
+                return web.json_response(
+                    {"status": "error", "error": "Each JSON entry must be an object"},
+                    status=400,
+                )
+            if "uid" in item and "password" in item:
+                uid, password = item["uid"], item["password"]
+            elif len(item) == 1:
+                uid, password = next(iter(item.items()))
+            else:
+                return web.json_response(
+                    {"status": "error", "error": 'Each entry must be {"UID": "password"} or {"uid": "UID", "password": "password"}'},
+                    status=400,
+                )
+            uid = str(uid).strip()
+            password = str(password).strip()
+            if not uid or not password:
+                return web.json_response(
+                    {"status": "error", "error": "UID and password values cannot be empty"},
+                    status=400,
+                )
+            imported[uid] = password
+
+        callback = bot_state.refresh_callbacks.get("on_account_preview_batch")
+        if callback is None:
+            return web.json_response(
+                {"status": "error", "error": "Account preview is not ready"},
+                status=503,
+            )
+
+        accounts = await callback(list(imported.items()))
+
+        return web.json_response({"status": "ok", "accounts": accounts})
+    except Exception as e:
+        return web.json_response({"status": "error", "error": str(e)}, status=500)
+
+
 async def handle_delete_account(request: web.Request) -> web.Response:
     try:
         data = await request.json()
-        uid = str(data.get("uid") or "").strip()
+        uid = str(data.get("uid") or "").strip() if isinstance(data, dict) else ""
         if not uid:
             return web.json_response(
                 {"status": "error", "error": "UID is required"}, status=400
             )
 
         async with bot_state.account_operation_lock:
-            credentials = bot_state.account_credentials.get(uid)
-            if credentials is None:
-                credentials = next(
-                    (value for value in bot_state.account_credentials.values()
-                     if str(value.get("account_id", "")) == uid),
-                    {},
-                )
-            auth_uid = str(credentials.get("auth_uid") or "").strip()
-            auth_token = str(credentials.get("auth_token") or credentials.get("access_token") or "").strip()
+            credential_records = []
+            seen_credentials = set()
+            for key, value in bot_state.account_credentials.items():
+                if key == uid or str(value.get("account_id", "")) == uid:
+                    if id(value) not in seen_credentials:
+                        credential_records.append(value)
+                        seen_credentials.add(id(value))
+
+            auth_uids = {
+                str(value.get("auth_uid") or "").strip()
+                for value in credential_records
+            }
+            auth_uids.discard("")
+            auth_tokens = {
+                str(value.get("auth_token") or value.get("access_token") or "").strip()
+                for value in credential_records
+            }
+            auth_tokens.discard("")
+            saved_uids = {uid, *auth_uids}
 
             existing = _load_accounts_file()
-            existing = [
+            remaining = [
                 acc for acc in existing
-                if str(acc.get("uid") or "").strip() not in {uid, auth_uid}
-                and (not auth_token or str(acc.get("token") or "").strip() != auth_token)
+                if str(acc.get("uid") or "").strip() not in saved_uids
+                and str(acc.get("account_id") or "").strip() != uid
+                and str(acc.get("token") or "").strip() not in auth_tokens
             ]
-            _save_accounts_file(existing)
+            saved_removed = len(remaining) != len(existing)
+            if saved_removed:
+                _save_accounts_file(remaining)
 
             worker_keys = {
-                uid, auth_uid, f"guest:{uid}", f"guest:{auth_uid}",
-                auth_token[:10] if auth_token else "",
-                f"token:{auth_token}" if auth_token else "",
+                uid, f"guest:{uid}",
             }
+            for auth_uid in auth_uids:
+                worker_keys.update({auth_uid, f"guest:{auth_uid}"})
+            for auth_token in auth_tokens:
+                worker_keys.update({
+                    auth_token[:10],
+                    f"token:{auth_token}",
+                })
             workers = {
                 bot_state.account_workers.pop(key)
                 for key in worker_keys if key and key in bot_state.account_workers
@@ -818,16 +914,26 @@ async def handle_delete_account(request: web.Request) -> web.Response:
                 await asyncio.gather(*workers, return_exceptions=True)
 
             removed = bot_state.remove_account(uid)
-            if auth_uid and auth_uid != uid:
+            for auth_uid in auth_uids:
                 removed = bot_state.remove_account(auth_uid) or removed
-
             for key, value in list(bot_state.account_credentials.items()):
-                if key in {uid, auth_uid} or value is credentials:
+                if key in saved_uids or id(value) in seen_credentials:
                     bot_state.account_credentials.pop(key, None)
 
             callback = bot_state.refresh_callbacks.get("on_account_removed")
             if callback:
-                await callback(uid, credentials)
+                if credential_records:
+                    for credentials in credential_records:
+                        await callback(uid, credentials)
+                else:
+                    await callback(uid, {})
+
+            removed = removed or saved_removed or bool(workers) or bool(credential_records)
+            if not removed:
+                return web.json_response(
+                    {"status": "error", "error": f"Account {uid} was not found"},
+                    status=404,
+                )
 
         bot_state.log(
             f"Account {uid} removed from rotation and its match stopped.",
@@ -842,7 +948,7 @@ async def handle_delete_account(request: web.Request) -> web.Response:
             "total_gained_exp": bot_state.total_gained_exp,
         })
     except Exception as e:
-        return web.json_response({"status": "error", "error": str(e)})
+        return web.json_response({"status": "error", "error": str(e)}, status=500)
 
 
 async def handle_refresh_account(request: web.Request) -> web.Response:
@@ -899,6 +1005,7 @@ async def start_web_dashboard(host: str = "0.0.0.0", port: int = 5000):
     app.router.add_post("/api/push/subscribe", handle_push_subscribe)
     app.router.add_post("/api/account/add", handle_add_account)
     app.router.add_post("/api/account/import", handle_import_accounts)
+    app.router.add_post("/api/account/preview", handle_preview_accounts)
     app.router.add_post("/api/account/delete", handle_delete_account)
     app.router.add_post("/api/account/refresh", handle_refresh_account)
     app.router.add_post("/api/account/restart", handle_restart_account)
